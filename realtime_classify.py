@@ -40,6 +40,11 @@ MIN_SAMPLES      = 50     # skip prediction if fewer samples in window
 DATA_DIR         = "."    # folder with training .txt files
 SAMPLE_HZ        = 100
 
+# ── Shake-to-start configuration ──────────────────────────────────────────────
+SHAKE_THRESHOLD  = 2.5    # g — acceleration magnitude to trigger classification
+SHAKE_MIN_HITS   = 3      # number of samples above threshold within the window
+SHAKE_WINDOW_SEC = 0.5    # seconds of recent samples to scan for shake
+
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 LABEL_COLORS = {
@@ -141,10 +146,10 @@ def main():
         sp.set_edgecolor(C["grid"])
 
     label_text = ax_label.text(
-        0.5, 0.5, "…",
+        0.5, 0.5, "Shake wrist to start classifying",
         transform=ax_label.transAxes,
         ha="center", va="center",
-        fontsize=22, fontweight="bold",
+        fontsize=16, fontweight="bold",
         color=LABEL_COLORS["…"],
     )
     prob_text = ax_label.text(
@@ -191,7 +196,22 @@ def main():
     ro_t  = readout(ax_temp, 0.50)
 
     # ── 4. Animation update callback ──────────────────────────────────────────
-    last_classify_ms = [0.0]   # mutable container so the closure can update it
+    last_classify_ms  = [0.0]   # mutable container so the closure can update it
+    classifying       = [False]  # toggled on/off by shake gesture
+    last_shake_ms     = [-2000.0]  # cooldown — prevents double-trigger from one shake
+    SHAKE_COOLDOWN_MS = 2000
+
+    def detect_shake(t, ax_, ay_, az_):
+        """Return True if a shake is detected in the most recent SHAKE_WINDOW_SEC."""
+        if len(t) < 2:
+            return False
+        t_cutoff = t[-1] - SHAKE_WINDOW_SEC
+        hits = sum(
+            1 for i, ti in enumerate(t)
+            if ti >= t_cutoff and
+            (ax_[i]**2 + ay_[i]**2 + az_[i]**2) ** 0.5 > SHAKE_THRESHOLD
+        )
+        return hits >= SHAKE_MIN_HITS
 
     def update(_):
         t, ax_, ay_, az_, gx_, gy_, gz_, tmp = reader.snapshot()
@@ -237,9 +257,26 @@ def main():
             ro_gz.set_text(f"GZ {gz_[-1]:+7.2f}")
             ro_t.set_text(f"{tmp[-1]:.2f} °C")
 
-        # ── Classify at most every CLASSIFY_EVERY_MS ms ───────────────────────
+        # ── Shake to toggle classification on/off ────────────────────────────
         now_ms = time.perf_counter() * 1000
-        if now_ms - last_classify_ms[0] >= CLASSIFY_EVERY_MS:
+        if detect_shake(t, ax_, ay_, az_) and now_ms - last_shake_ms[0] >= SHAKE_COOLDOWN_MS:
+            last_shake_ms[0] = now_ms
+            classifying[0] = not classifying[0]
+            if classifying[0]:
+                label_text.set_text("…")
+                label_text.set_fontsize(22)
+                label_text.set_color(LABEL_COLORS["…"])
+                prob_text.set_text("")
+                print("[INFO] Shake detected — classification started.")
+            else:
+                label_text.set_text("Paused — shake to resume")
+                label_text.set_fontsize(16)
+                label_text.set_color(LABEL_COLORS["…"])
+                prob_text.set_text("")
+                print("[INFO] Shake detected — classification paused.")
+
+        # ── Classify at most every CLASSIFY_EVERY_MS ms ───────────────────────
+        if classifying[0] and now_ms - last_classify_ms[0] >= CLASSIFY_EVERY_MS:
             last_classify_ms[0] = now_ms
             result = classify_snapshot(
                 model, t, ax_, ay_, az_, gx_, gy_, gz_,
@@ -248,6 +285,7 @@ def main():
             if result is not None:
                 exercise, probs = result
                 label_text.set_text(exercise)
+                label_text.set_fontsize(22)
                 label_text.set_color(LABEL_COLORS.get(exercise, C["text"]))
                 prob_text.set_text(
                     "   ".join(f"{CLASS_NAMES[i]} {probs[i]:.0%}" for i in range(len(CLASS_NAMES)))
