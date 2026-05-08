@@ -42,10 +42,15 @@ STEP_SEC    = 0.5    # sliding step — smaller = more windows = more training s
 MIN_SAMPLES = 50     # discard windows with fewer samples than this
 
 CLASS_MAP = {
-    "bicep_curl":     0,
-    "shoulder_press": 1,
+    "bicep_curl":      0,
+    "shoulder_press":  1,
+    "lateral_raise":   2,
+    "chest_fly":       3,
+    "row":             4,
+    "tricep_pushdown": 5,
+    "squat":           6,
 }
-CLASS_NAMES = ["Bicep Curl", "Shoulder Press"]
+CLASS_NAMES = ["Bicep Curl", "Shoulder Press", "Lateral Raise", "Chest Fly", "Row", "Tricep Pushdown", "Squat"]
 
 
 # ─────────────────────────────────────────────
@@ -317,9 +322,9 @@ def predict_new_file(model, fpath: str):
 
     preds = [model.predict(extract_features(w).reshape(1, -1))[0] for w in windows]
     vote  = max(set(preds), key=preds.count)
+    votes_str = "  |  ".join(f"{CLASS_NAMES[i]}={preds.count(i)}" for i in range(len(CLASS_NAMES)))
     print(f"\nPrediction for '{os.path.basename(fpath)}':")
-    print(f"  Windows: {len(preds)}  |  Votes: "
-          f"Bicep Curl={preds.count(0)}, Shoulder Press={preds.count(1)}")
+    print(f"  Windows: {len(preds)}  |  Votes: {votes_str}")
     print(f"  → {CLASS_NAMES[vote]}")
     return CLASS_NAMES[vote]
 
