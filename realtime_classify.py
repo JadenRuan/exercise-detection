@@ -1,5 +1,5 @@
 """
-Real-time exercise classifier: Bicep Curl vs Shoulder Press
+Real-time exercise classifier: Bicep Curl, Shoulder Press, Lateral Raise, Chest Fly, Row, Tricep Pushdown, Squat
 Combines imu.py (serial reader + live plot) with classify.py (SVM model).
 
 Usage:
@@ -43,9 +43,14 @@ SAMPLE_HZ        = 100
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 LABEL_COLORS = {
-    "Bicep Curl":     "#4fc3f7",
-    "Shoulder Press": "#f48fb1",
-    "…":              "#888888",
+    "Bicep Curl":      "#4fc3f7",
+    "Shoulder Press":  "#f48fb1",
+    "Lateral Raise":   "#a5d6a7",
+    "Chest Fly":       "#ffcc80",
+    "Row":             "#ce93d8",
+    "Tricep Pushdown": "#ef9a9a",
+    "Squat":           "#80cbc4",
+    "…":               "#888888",
 }
 
 
@@ -82,7 +87,7 @@ def classify_snapshot(model, t, ax, ay, az, gx, gy, gz, window_sec: float):
     features = extract_features(df).reshape(1, -1)
     pred  = model.predict(features)[0]
     probs = model.predict_proba(features)[0]
-    return CLASS_NAMES[pred], probs[0], probs[1]
+    return CLASS_NAMES[pred], probs
 
 
 def main():
@@ -241,11 +246,11 @@ def main():
                 args.classify_window,
             )
             if result is not None:
-                exercise, p_bicep, p_shoulder = result
+                exercise, probs = result
                 label_text.set_text(exercise)
                 label_text.set_color(LABEL_COLORS.get(exercise, C["text"]))
                 prob_text.set_text(
-                    f"Bicep Curl {p_bicep:.0%}   Shoulder Press {p_shoulder:.0%}"
+                    "   ".join(f"{CLASS_NAMES[i]} {probs[i]:.0%}" for i in range(len(CLASS_NAMES)))
                 )
 
         status_txt.set_text(reader.status)

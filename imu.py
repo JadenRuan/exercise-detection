@@ -101,26 +101,26 @@ class SerialReader(threading.Thread):
         self.connected = False
         self.status    = "Connecting…"
         self.log_header_written = False
+        self._stop_event = threading.Event()
+        self._log_file   = None
 
     def run(self):
-        while True:
+        while not self._stop_event.is_set():
             try:
                 with serial.Serial(self.port, self.baud, timeout=1) as ser:
                     self.connected = True
                     self.status    = f"Connected  {self.port}  @{self.baud} baud"
                     t0 = time.perf_counter()
 
-                    log_file = None
                     if self.outfile:
                         self.outfile.parent.mkdir(parents=True, exist_ok=True)
-                        log_file = self.outfile.open("a", encoding="utf-8")
-                        if not self.log_header_written:
-                            log_file.write("time_sec,ax,ay,az,gx,gy,gz,temp_c\n")
-                            log_file.flush()
-                            self.log_header_written = True
+                        self._log_file = self.outfile.open("w", encoding="utf-8")
+                        self._log_file.write("time_sec,ax,ay,az,gx,gy,gz,temp_c\n")
+                        self._log_file.flush()
+                        self.log_header_written = True
 
                     try:
-                        while True:
+                        while not self._stop_event.is_set():
                             raw = ser.readline()
                             try:
                                 line = raw.decode("utf-8", errors="replace").strip()
@@ -141,18 +141,31 @@ class SerialReader(threading.Thread):
                                 self.gx.append(gx);   self.gy.append(gy);   self.gz.append(gz)
                                 self.temp.append(temp)
 
-                            if log_file is not None:
-                                log_file.write(
+                            if self._log_file is not None:
+                                self._log_file.write(
                                     f"{now:.3f},{ax:.6f},{ay:.6f},{az:.6f},{gx:.6f},{gy:.6f},{gz:.6f},{temp:.6f}\n"
                                 )
-                                log_file.flush()
+                                self._log_file.flush()
                     finally:
-                        if log_file is not None:
-                            log_file.close()
+                        if self._log_file is not None:
+                            self._log_file.flush()
+                            self._log_file.close()
+                            self._log_file = None
             except serial.SerialException as e:
                 self.connected = False
                 self.status    = f"Disconnected — {e}  (retrying…)"
-                time.sleep(2)
+                if not self._stop_event.is_set():
+                    time.sleep(2)
+
+    def stop(self):
+        """Signal the reader loop to exit and wait for the log file to be saved."""
+        self._stop_event.set()
+        self.join(timeout=3)
+        # Fallback flush in case the thread didn't exit in time
+        if self._log_file is not None:
+            self._log_file.flush()
+            self._log_file.close()
+            self._log_file = None
 
     def snapshot(self):
         """Thread-safe copy of all buffers."""
@@ -307,6 +320,16 @@ def main():
 
     from matplotlib.animation import FuncAnimation
     ani = FuncAnimation(fig, update, interval=50, blit=False, cache_frame_data=False)
+
+    def on_key(event):
+        if event.key == ";":
+            print("\n[INFO] Semicolon pressed — saving log file and exiting.")
+            ani.event_source.stop()
+            reader.stop()
+            print(f"[INFO] Log saved to: {args.outfile}")
+            plt.close("all")
+
+    fig.canvas.mpl_connect("key_press_event", on_key)
 
     plt.show()
 
