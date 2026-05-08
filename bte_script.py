@@ -174,6 +174,8 @@ def main():
 
     threading.Thread(target=lambda: asyncio.run(bte()), daemon=True).start()
 
+    with open("reps.txt", "w"):
+        pass
 
 
     # ── 3. Build figure ───────────────────────────────────────────────────────
@@ -323,10 +325,7 @@ def main():
     # Accumulate ALL samples in a rolling buffer instead of windowed chunks
     signal_buffer = []
     time_buffer = []
-    prev_buffer_peak_count = [0.0]
-    peak_count_offset = [0.0]
     counted_peak_times = set()
-
 
     def check_rep_state(signal, tv, rep_count):
         # Append new samples to the rolling buffer
@@ -375,7 +374,9 @@ def main():
         label_text.set_text(f'rest time: {rest_time[0]:1.0f} s')
         time_diff = tv[-1] - last_rest_recorded[0]
 
-        if rest_time[0] > 3:
+        if rest_time[0] > 3 and rep_count[0] != 0:
+            with open("reps.txt", "a") as fd:
+                fd.write(f'Bicep Curl - {rep_count[0]}\n')
             rep_count[0] = 0
 
         if abs(signal[-1]) <= AMPLITUDE_THRESHOLD and last_rest_recorded[0] != 0:
@@ -383,6 +384,9 @@ def main():
             rest_time[0] = rest_time[0] + time_diff
         else:
             is_rest[0] = False
+            if rest_time[0] > 3:
+                with open("reps.txt", "a") as fd:
+                    fd.write(f'Time Rested - {rest_time[0]:1.0f}s\n')
             rest_time[0] = 0.0
 
         last_rest_recorded[0] = tv[-1]
