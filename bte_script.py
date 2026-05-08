@@ -351,17 +351,10 @@ def main():
 
         if max(signal_buffer) < AMPLITUDE_THRESHOLD:
             return  # signal too flat, user not moving
+        
         arr = np.array(signal_buffer)
         peaks, _ = find_peaks(arr, distance=PEAK_DISTANCE, prominence=PEAK_PROMINENCE, width=PEAK_WIDTH)
-        # current_peak_count = len(peaks)
 
-        # # If the buffer just trimmed old data, peaks in the window dropped.
-        # # Save whatever was lost into the offset before updating.
-        # if current_peak_count < prev_buffer_peak_count[0]:
-        #     peak_count_offset[0] += prev_buffer_peak_count[0]
-
-        # prev_buffer_peak_count[0] = current_peak_count
-        # rep_count[0] = (peak_count_offset[0] + current_peak_count) / 2
         for p in peaks:
             peak_time = round(time_buffer[p] * 5) / 5  # snap to 0.2s buckets
             if peak_time not in counted_peak_times:

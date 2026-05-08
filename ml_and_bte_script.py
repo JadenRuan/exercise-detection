@@ -272,7 +272,7 @@ def main():
     last_rep_checked = [0.0]
     last_rest_recorded = [0.0]
     rest_time = [0.0]
-    is_rest = [False]
+    shook = [False]
     
 
     def lowpass(data, cutoff_hz=3, sample_hz=100, order=4):
@@ -407,10 +407,8 @@ def main():
             rep_count[0] = 0
 
         if abs(signal[-1]) <= AMPLITUDE_THRESHOLD and last_rest_recorded[0] != 0:
-            if not is_rest[0]: is_rest[0] = True
             rest_time[0] = rest_time[0] + time_diff
         else:
-            is_rest[0] = False
             rest_time[0] = 0.0
 
         last_rest_recorded[0] = tv[-1]
@@ -467,6 +465,9 @@ def main():
             # ro_gy.set_text(f"GY {gy_[-1]:+7.2f}")
             # ro_gz.set_text(f"GZ {gz_[-1]:+7.2f}")
             # ro_t.set_text(f"{tmp[-1]:.2f} °C")
+        if shook[0]:
+            update_rest(f,tv)
+            check_rep_state(f, tv, rep_count)
         
 # ── Shake to toggle classification on/off ────────────────────────────
         now_ms = time.perf_counter() * 1000
@@ -479,12 +480,14 @@ def main():
                 ax_label.set_facecolor(LABEL_COLORS["…"])
                 prob_text.set_text("")
                 print("[INFO] Shake detected — classification started.")
+                shook[0] = True
             else:
                 ax_label.set_title("Paused — shake to resume")
                 # label_text.set_fontsize(16)
                 ax_label.set_facecolor(LABEL_COLORS["…"])
                 prob_text.set_text("")
                 print("[INFO] Shake detected — classification paused.")
+                shook[0] = False
 
         # ── Classify at most every CLASSIFY_EVERY_MS ms ───────────────────────
         if classifying[0] and now_ms - last_classify_ms[0] >= CLASSIFY_EVERY_MS:
@@ -502,9 +505,6 @@ def main():
                 prob_text.set_text(
                     "   ".join(f"{CLASS_NAMES[i]} {probs[i]:.0%}" for i in range(len(CLASS_NAMES)))
                 )
-
-                update_rest(f,tv)
-                check_rep_state(f, tv, rep_count)
 
 
         # status_txt.set_text(reader.status)
